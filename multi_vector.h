@@ -21,7 +21,7 @@ namespace mvec {
 		std::mutex _mtx;
 		std::condition_variable _cv;
 		std::size_t _reserved = 0;//reserveまで到達したthread
-
+		bool _calculate_end = false;
 
 		std::vector<std::vector<value_type>> _vecs;
 
@@ -38,7 +38,7 @@ namespace mvec {
 		}
 
 		/// <summary>
-		/// 最初に呼び出す
+		/// 最初に一つのスレッドから呼び出す
 		/// 総数を入力する
 		/// 
 		/// 各スレッド用に均等にバッファが準備される
@@ -58,7 +58,7 @@ namespace mvec {
 		/// 集計準備 それぞれのスレッドから呼び出され、処理が完了するまでブロッキング
 		/// 0に対応するthreadは必ず呼ばなければならない
 		/// </summary>
-		void reserve_totalling(const size_t& ind) {
+		void reserve_totalling(size_t ind) {
 
 			if (_vecs.empty()) return;
 
@@ -66,11 +66,20 @@ namespace mvec {
 				_offsets.resize(_vecs.size(), 0);
 
 			std::unique_lock lock(_mtx);
+			
 			++_reserved;
 
-			_cv.wait(lock, [&]() {
-				return _reserved == _vecs.size();
-				});
+			if (_reserved == _vecs.size()) {
+				_cv.notify_all();
+			}
+			else {
+
+				_cv.wait(lock, [&]() {
+					return _reserved == _vecs.size();
+					});
+			}
+
+			
 
 			if (ind == 0) {
 
@@ -82,17 +91,25 @@ namespace mvec {
 				}
 				_totallinged.resize(sum);
 
-				//終了合図と初期化を兼ねる
-				_reserved = 0;
+				//終了合図
+				_calculate_end = true;
+
+				lock.unlock();
+
+				_cv.notify_all();
+			}
+			else {
+
+				if (!_calculate_end) {
+
+					//集計が終わるまで他のスレッドが帰ると不味いので止める
+					_cv.wait(lock, [&]() {
+						return _calculate_end;
+						});
+				}
 			}
 
-			lock.unlock();
 
-			//集計が終わるまで他のスレッドが帰ると不味いので止める
-
-			_cv.wait(lock, [&]() {
-				return _reserved == 0;
-				});
 
 		}
 
@@ -105,6 +122,7 @@ namespace mvec {
 
 		/// <summary>
 		/// それぞれのthreadから呼び出す
+		/// 0に対応するthreadは必ず呼ばなければならない
 		/// </summary>
 		/// <param name="ind"></param>
 		void totalling(const size_t& ind) {
@@ -112,13 +130,35 @@ namespace mvec {
 #ifdef _DEBUG
 			if (ind >= _offsets.size())
 				throw error::located_exception("out of range");
-
 #endif
 
 			if (_totallinged.empty() || _vecs[ind].empty()) return;
 
 			std::memcpy(_totallinged.data() + _offsets[ind], _vecs[ind].data(), _vecs[ind].size() * sizeof(value_type));
 			_vecs[ind].clear();
+
+			//終了を知らせる
+			std::lock_guard lock(_mtx);
+			--_reserved;
+
+			if (_reserved == 0) {
+				_cv.notify_all();//waitしているメインスレッドに通知
+
+				_calculate_end = false;
+			}
+		}
+
+
+		/// <summary>
+		/// totalling が終了するまでブロッキングする
+		/// </summary>
+		void totalling_wait() {
+			std::unique_lock lock(_mtx);
+			_cv.wait(
+				lock,
+				[&]() {
+					return _reserved == 0;
+				});
 		}
 
 		/// <summary>
