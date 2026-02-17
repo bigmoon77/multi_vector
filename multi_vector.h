@@ -7,8 +7,8 @@
 
 namespace mvec {
 
+	/// このクラスは複数のスレッドでの処理結果の集計などに用いることができる
 	/// thread には 0 ~ use_thread - 1の indexが対応する
-	/// そのindexを使用する
 	template<typename t>
 	class multi_vector {
 
