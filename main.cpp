@@ -32,6 +32,12 @@ int main() {
 	}
 
 	a.totalling_wait();
+	
+	std::cout << a.size() << std::endl;
+	for (size_t i = 0; i < a.size(); i++)
+	{
+		std::cout << a.data()[i] << std::endl;
+	}
 
 	return 0;
 }

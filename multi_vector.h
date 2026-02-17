@@ -71,18 +71,36 @@ namespace mvec {
 
 			if (_reserved == _vecs.size()) {
 				_cv.notify_all();
+				_offsets[ind] = 1;
 			}
 			else {
 
 				_cv.wait(lock, [&]() {
 					return _reserved == _vecs.size();
 					});
+				_offsets[ind] = 1;
 			}
 
+			//ここで全てのスレッドが足並みを揃えないと一つ上のwaitでブロッキングする可能性がある
 			
+
+
 
 			if (ind == 0) {
 
+				lock.unlock();
+				size_t tmp;
+				do
+				{
+					tmp = 0;
+					for (auto&i : _offsets)
+					{
+						tmp += i;
+					}
+				} while (tmp != _offsets.size());
+
+
+				lock.lock();
 				size_t sum = 0;
 				for (size_t i = 0; i < _vecs.size(); i++)
 				{
@@ -94,23 +112,14 @@ namespace mvec {
 				//終了合図
 				_calculate_end = true;
 
-				lock.unlock();
-
 				_cv.notify_all();
 			}
-			else {
-
-				if (!_calculate_end) {
-
-					//集計が終わるまで他のスレッドが帰ると不味いので止める
-					_cv.wait(lock, [&]() {
-						return _calculate_end;
-						});
-				}
+			else if (!_calculate_end) {
+				//集計が終わるまで他のスレッドが帰ると不味いので止める
+				_cv.wait(lock, [&]() {
+					return _calculate_end;
+					});
 			}
-
-
-
 		}
 
 		void push_back(const size_t& ind, const value_type& val) {
