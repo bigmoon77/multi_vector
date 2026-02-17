@@ -90,13 +90,18 @@ namespace mvec {
 
 				lock.unlock();
 				size_t tmp;
+
 				do
 				{
 					tmp = 0;
+
+
+					lock.lock();
 					for (auto&i : _offsets)
 					{
 						tmp += i;
 					}
+					lock.unlock();
 				} while (tmp != _offsets.size());
 
 
