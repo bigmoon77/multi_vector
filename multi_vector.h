@@ -52,6 +52,7 @@ namespace mvec {
 			{
 				vec.reserve(div_count);
 			}
+			_reserved = 0;
 		}
 
 		/// <summary>
@@ -156,9 +157,12 @@ namespace mvec {
 			--_reserved;
 
 			if (_reserved == 0) {
+
+				_reserved = static_cast<size_t>(-1);
+				_calculate_end = false;
+
 				_cv.notify_all();//waitしているメインスレッドに通知
 
-				_calculate_end = false;
 			}
 		}
 
@@ -168,11 +172,16 @@ namespace mvec {
 		/// </summary>
 		void totalling_wait() {
 			std::unique_lock lock(_mtx);
-			_cv.wait(
-				lock,
-				[&]() {
-					return _reserved == 0;
-				});
+
+			if (_reserved != static_cast<size_t>(-1)) {
+
+				_cv.wait(
+					lock,
+					[&]() {
+						return _reserved == static_cast<size_t>(-1);
+					});
+			}
+			_reserved = 0;
 		}
 
 		/// <summary>

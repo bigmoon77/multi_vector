@@ -20,18 +20,17 @@ int main() {
 	a.reserve_push(5000);
 
 	std::vector<std::thread> threads(5);
-	
+
 	for (size_t i = 0; i < 5; i++)
 	{
 		threads[i] = std::thread(&hoge, std::reference_wrapper(a), i);
 	}
-
+	a.totalling_wait();
 	for (auto&i : threads)
 	{
 		i.join();
 	}
 
-	a.totalling_wait();
 	
 	std::cout << a.size() << std::endl;
 	for (size_t i = 0; i < a.size(); i++)
